@@ -62,57 +62,6 @@ process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
 });
 
-// Handle dwm force-kill (Win+Q) - Clean up BEFORE process dies
-process.on("SIGTERM", async () => {
-  console.log("⚠️ SIGTERM received (Win+Q), cleaning up...");
-
-  // ✅ CRITICAL: Unregister hotkeys FIRST
-  try {
-    globalShortcut.unregisterAll();
-    console.log("✅ Unregistered all hotkeys");
-  } catch (err) {
-    console.error("❌ Failed to unregister hotkeys:", err);
-  }
-
-  // Then flush storage
-  try {
-    if (windowManager?.controlPanelWindow?.webContents?.session) {
-      await windowManager.controlPanelWindow.webContents.session.flushStorageData();
-    }
-    if (windowManager?.mainWindow?.webContents?.session) {
-      await windowManager.mainWindow.webContents.session.flushStorageData();
-    }
-  } catch (err) {
-    console.warn("⚠️ Storage flush failed:", err);
-  }
-
-  process.exit(0);
-});
-
-process.on("SIGINT", async () => {
-  console.log("⚠️ SIGINT received (Ctrl+C), cleaning up...");
-
-  // ✅ CRITICAL: Unregister hotkeys FIRST
-  try {
-    globalShortcut.unregisterAll();
-    console.log("✅ Unregistered all hotkeys");
-  } catch (err) {
-    console.error("❌ Failed to unregister hotkeys:", err);
-  }
-
-  try {
-    if (windowManager?.controlPanelWindow?.webContents?.session) {
-      await windowManager.controlPanelWindow.webContents.session.flushStorageData();
-    }
-    if (windowManager?.mainWindow?.webContents?.session) {
-      await windowManager.mainWindow.webContents.session.flushStorageData();
-    }
-  } catch {}
-
-  process.exit(0);
-});
-
-
 // Import helper modules
 const DebugLogger = require("./src/helpers/debugLogger");
 const EnvironmentManager = require("./src/helpers/environment");
