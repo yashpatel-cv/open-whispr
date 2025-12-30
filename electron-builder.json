@@ -20,10 +20,14 @@
     "src/utils/**/*",
     "src/updater.js",
     "src/components.json",
+    "src/python/**/*",
+    "src/models/**/*",
     "!node_modules/.cache/**/*",
     "!src/node_modules/**/*"
   ],
   "asarUnpack": [
+    "src/python/**/*",
+    "src/models/**/*",
     "whisper_bridge.py",
     "**/node_modules/ffmpeg-static/**/*",
     "**/node_modules/better-sqlite3/**/*"
@@ -66,10 +70,7 @@
   },
   "linux": {
     "target": [
-      "AppImage",
-      "deb",
-      "rpm",
-      "tar.gz"
+      "AppImage"
     ],
     "icon": "src/assets/icon.png",
     "category": "Utility",

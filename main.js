@@ -1,9 +1,51 @@
 const { app, globalShortcut, BrowserWindow, dialog } = require("electron");
 
 // Ensure macOS menus use the proper casing for the app name
-if (process.platform === "darwin" && app.getName() !== "OpenWhispr") {
+// if (process.platform === "darwin" && app.getName() !== "OpenWhispr") {
+if (app.getName() !== "OpenWhispr") {
   app.setName("OpenWhispr");
 }
+
+// Fix for Linux persistence issues: Force consistent user data path
+if (process.platform === "linux") {
+  const path = require("path");
+  const os = require("os");
+  const fs = require("fs");
+
+  // Force storage to ~/.config/open-whispr explicitly
+  const userDataPath = path.join(os.homedir(), ".config", "open-whispr");
+
+  // Ensure directory exists
+  if (!fs.existsSync(userDataPath)) {
+    try {
+      fs.mkdirSync(userDataPath, { recursive: true });
+    } catch (e) {
+      console.error("Failed to create user data path:", e);
+    }
+  }
+
+  app.setPath("userData", userDataPath);
+  // Clean orphaned LevelDB lock files on startup
+  const lockFiles = [
+    path.join(userDataPath, "Local Storage", "leveldb", "LOCK"),
+    path.join(userDataPath, "Session Storage", "LOCK"),
+    path.join(userDataPath, "IndexedDB", "LOCK")
+  ];
+
+  lockFiles.forEach(lockFile => {
+    try {
+      if (fs.existsSync(lockFile)) {
+        fs.unlinkSync(lockFile);
+        console.log("✅ Cleaned orphaned lock:", lockFile);
+      }
+    } catch (err) {
+      console.warn("⚠️ Could not clean lock file:", lockFile, err.message);
+    }
+  });
+}
+
+// Suppress AppImage warning
+process.env.APPIMAGE = process.env.APPIMAGE || process.execPath;
 
 // Add global error handling for uncaught exceptions
 process.on("uncaughtException", (error) => {
@@ -19,6 +61,57 @@ process.on("uncaughtException", (error) => {
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
 });
+
+// Handle dwm force-kill (Win+Q) - Clean up BEFORE process dies
+process.on("SIGTERM", async () => {
+  console.log("⚠️ SIGTERM received (Win+Q), cleaning up...");
+
+  // ✅ CRITICAL: Unregister hotkeys FIRST
+  try {
+    globalShortcut.unregisterAll();
+    console.log("✅ Unregistered all hotkeys");
+  } catch (err) {
+    console.error("❌ Failed to unregister hotkeys:", err);
+  }
+
+  // Then flush storage
+  try {
+    if (windowManager?.controlPanelWindow?.webContents?.session) {
+      await windowManager.controlPanelWindow.webContents.session.flushStorageData();
+    }
+    if (windowManager?.mainWindow?.webContents?.session) {
+      await windowManager.mainWindow.webContents.session.flushStorageData();
+    }
+  } catch (err) {
+    console.warn("⚠️ Storage flush failed:", err);
+  }
+
+  process.exit(0);
+});
+
+process.on("SIGINT", async () => {
+  console.log("⚠️ SIGINT received (Ctrl+C), cleaning up...");
+
+  // ✅ CRITICAL: Unregister hotkeys FIRST
+  try {
+    globalShortcut.unregisterAll();
+    console.log("✅ Unregistered all hotkeys");
+  } catch (err) {
+    console.error("❌ Failed to unregister hotkeys:", err);
+  }
+
+  try {
+    if (windowManager?.controlPanelWindow?.webContents?.session) {
+      await windowManager.controlPanelWindow.webContents.session.flushStorageData();
+    }
+    if (windowManager?.mainWindow?.webContents?.session) {
+      await windowManager.mainWindow.webContents.session.flushStorageData();
+    }
+  } catch {}
+
+  process.exit(0);
+});
+
 
 // Import helper modules
 const DebugLogger = require("./src/helpers/debugLogger");
@@ -46,10 +139,10 @@ function setupProductionPath() {
       '/Library/Frameworks/Python.framework/Versions/3.10/bin',
       '/Library/Frameworks/Python.framework/Versions/3.9/bin'
     ];
-    
+
     const currentPath = process.env.PATH || '';
     const pathsToAdd = commonPaths.filter(p => !currentPath.includes(p));
-    
+
     if (pathsToAdd.length > 0) {
       process.env.PATH = `${currentPath}:${pathsToAdd.join(':')}`;
     }
@@ -177,13 +270,21 @@ trayManager.setWindowManager(windowManager);
 
 // App event handlers
 app.whenReady().then(() => {
+  // Force-clear any orphaned hotkey registrations from previous crashes/force-kills
+  try {
+    globalShortcut.unregisterAll();
+    console.log("Cleared all orphaned global shortcuts");
+  } catch (err) {
+    console.warn("Could not clear shortcuts:", err.message);
+  }
+
   // Hide dock icon on macOS for a cleaner experience
   // The app will still show in the menu bar and command bar
   if (process.platform === 'darwin' && app.dock) {
     // Keep dock visible for now to maintain command bar access
     // We can hide it later if needed: app.dock.hide()
   }
-  
+
   startApp();
 });
 
@@ -191,6 +292,18 @@ app.on("window-all-closed", () => {
   // Don't quit on macOS when all windows are closed
   // The app should stay in the dock/menu bar
   if (process.platform !== "darwin") {
+    console.log("🚪 All windows closed, cleaning up and exiting...");
+
+    // Unregister hotkeys before exit
+    try {
+      globalShortcut.unregisterAll();
+      globeKeyManager.stop();
+      updateManager.cleanup();
+      console.log("✅ Unregistered all hotkeys");
+    } catch (err) {
+      console.warn("⚠️ Hotkey cleanup failed:", err);
+    }
+    // Exit the process completely (don't keep running in background)
     app.quit();
   }
   // On macOS, keep the app running even without windows
@@ -225,7 +338,7 @@ app.on("activate", () => {
       // If control panel doesn't exist, create it
       windowManager.createControlPanelWindow();
     }
-    
+
     // Ensure dictation panel maintains its always-on-top status
     if (windowManager && windowManager.mainWindow && !windowManager.mainWindow.isDestroyed()) {
       windowManager.enforceMainWindowOnTop();
@@ -233,8 +346,42 @@ app.on("activate", () => {
   }
 });
 
-app.on("will-quit", () => {
-  globalShortcut.unregisterAll();
-  globeKeyManager.stop();
-  updateManager.cleanup();
+app.on("will-quit", (event) => {
+  event.preventDefault();
+
+  (async () => {
+    console.log("🛑 App quitting gracefully...");
+
+    // ✅ Unregister hotkeys FIRST
+    try {
+      globalShortcut.unregisterAll();
+      console.log("✅ Unregistered all hotkeys");
+    } catch (err) {
+      console.warn("⚠️ Hotkey cleanup failed:", err);
+    }
+
+    // Then flush storage
+    try {
+      if (windowManager?.controlPanelWindow && !windowManager.controlPanelWindow.isDestroyed()) {
+        await windowManager.controlPanelWindow.webContents.session.flushStorageData();
+      }
+      if (windowManager?.mainWindow && !windowManager.mainWindow.isDestroyed()) {
+        await windowManager.mainWindow.webContents.session.flushStorageData();
+      }
+    } catch (err) {
+      console.warn("⚠️ Storage flush failed:", err);
+    }
+
+    // Clean up other managers
+    try {
+      globeKeyManager.stop();
+      updateManager.cleanup();
+    } catch (err) {
+      console.warn("⚠️ Manager cleanup failed:", err);
+    }
+
+    setTimeout(() => {
+      app.exit(0);
+    }, 100);
+  })();
 });

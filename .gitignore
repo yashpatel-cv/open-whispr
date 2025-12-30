@@ -272,4 +272,36 @@ $RECYCLE.BIN/
 .Spotlight-V100
 .Trashes
 ehthumbs.db
-Thumbs.db 
+Thumbs.db
+
+# Electron user data / runtime cache (generated when running the app)
+.updaterId
+Cache/
+Code Cache/
+Cookies
+Cookies-journal
+Crashpad/
+DIPS
+DIPS-shm
+DIPS-wal
+DawnGraphiteCache/
+DawnWebGPUCache/
+Dictionaries/
+GPUCache/
+Local Storage/
+Network Persistent State
+Preferences
+Session Storage/
+Shared Dictionary/
+SharedStorage
+SharedStorage-wal
+TransportSecurity
+Trust Tokens
+Trust Tokens-journal
+transcriptions.db
+IndexedDB/
+
+# Python virtual environment (if using local Whisper)
+venv/
+.venv/
+python-*/

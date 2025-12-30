@@ -165,6 +165,12 @@ class WindowManager {
 
     this.controlPanelWindow.on("close", (event) => {
       if (!this.isQuitting) {
+	// If the window is being destroyed, don't prevent it
+        if (process.platform === "linux") {
+          // Let the window actually close on Linux (respects dwm Win+Q)
+          console.log("🚪 Control panel closing (Linux)...");
+          return;
+        }
         event.preventDefault();
         if (process.platform === "darwin") {
           this.controlPanelWindow.minimize();

@@ -65,10 +65,10 @@ class AudioManager {
         this.onStateChange?.({ isRecording: false, isProcessing: true });
 
         const audioBlob = new Blob(this.audioChunks, { type: "audio/wav" });
-        
+
         if (audioBlob.size === 0) {
         }
-        
+
         const durationSeconds = this.recordingStartTime
           ? (Date.now() - this.recordingStartTime) / 1000
           : null;
@@ -85,11 +85,11 @@ class AudioManager {
 
       return true;
     } catch (error) {
-      
+
       // Provide more specific error messages
       let errorTitle = "Recording Error";
       let errorDescription = `Failed to access microphone: ${error.message}`;
-      
+
       if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
         errorTitle = "Microphone Access Denied";
         errorDescription = "Please grant microphone permission in your system settings and try again.";
@@ -100,7 +100,7 @@ class AudioManager {
         errorTitle = "Microphone In Use";
         errorDescription = "The microphone is being used by another application. Please close other apps and try again.";
       }
-      
+
       this.onError?.({
         title: errorTitle,
         description: errorDescription,
@@ -309,32 +309,32 @@ class AudioManager {
       agentName,
       textLength: text.length
     });
-    
+
     const startTime = Date.now();
-    
+
     try {
       const result = await ReasoningService.processText(text, model, agentName);
-      
+
       const processingTime = Date.now() - startTime;
-      
+
       debugLogger.logReasoning("REASONING_SERVICE_COMPLETE", {
         model,
         processingTimeMs: processingTime,
         resultLength: result.length,
         success: true
       });
-      
+
       return result;
     } catch (error) {
       const processingTime = Date.now() - startTime;
-      
+
       debugLogger.logReasoning("REASONING_SERVICE_ERROR", {
         model,
         processingTimeMs: processingTime,
         error: error.message,
         stack: error.stack
       });
-      
+
       throw error;
     }
   }
@@ -444,13 +444,13 @@ class AudioManager {
         });
 
         const result = await this.processWithReasoningModel(preparedText, reasoningModel, agentName);
-        
+
         debugLogger.logReasoning("REASONING_SUCCESS", {
           resultLength: result.length,
           resultPreview: result.substring(0, 100) + (result.length > 100 ? "..." : ""),
           processingTime: new Date().toISOString()
         });
-        
+
         return result;
       } catch (error) {
         debugLogger.logReasoning("REASONING_FAILED", {
@@ -493,7 +493,7 @@ class AudioManager {
 
       const formData = new FormData();
       formData.append("file", optimizedAudio, "audio.wav");
-      formData.append("model", "whisper-1");
+      formData.append("model", "whisper-large-v3");
 
       if (language && language !== "auto") {
         formData.append("language", language);

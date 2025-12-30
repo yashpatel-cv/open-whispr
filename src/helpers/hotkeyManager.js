@@ -11,8 +11,13 @@ class HotkeyManager {
       throw new Error("Callback function is required for hotkey setup");
     }
 
+    // Unregister previous hotkey if it exists
     if (this.currentHotkey && this.currentHotkey !== "GLOBE") {
-      globalShortcut.unregister(this.currentHotkey);
+      try {
+        globalShortcut.unregister(this.currentHotkey);
+      } catch (err) {
+        console.warn(`Warning unregistering previous hotkey ${this.currentHotkey}:`, err.message);
+      }
     }
 
     try {
@@ -27,11 +32,27 @@ class HotkeyManager {
         return { success: true, hotkey };
       }
 
-      // Register the new hotkey
-      const success = globalShortcut.register(hotkey, callback);
+      // First attempt: Try to register directly
+      let success = globalShortcut.register(hotkey, callback);
+
+      // SAFETY NET: If registration failed, force-clear all shortcuts and retry
+      if (!success) {
+        console.warn(`⚠️  Hotkey registration failed for "${hotkey}", clearing all shortcuts and retrying...`);
+        try {
+          globalShortcut.unregisterAll();
+          success = globalShortcut.register(hotkey, callback);
+        } catch (retryErr) {
+          console.error("Failed to register hotkey after retry:", retryErr);
+          return {
+            success: false,
+            error: `Failed to register hotkey after retry: ${retryErr.message}`,
+          };
+        }
+      }
 
       if (success) {
         this.currentHotkey = hotkey;
+        console.log(`✅ Hotkey registered: ${hotkey}`);
         return { success: true, hotkey };
       } else {
         console.error(`Failed to register hotkey: ${hotkey}`);
@@ -107,11 +128,20 @@ class HotkeyManager {
   }
 
   unregisterAll() {
-    globalShortcut.unregisterAll();
+    try {
+      globalShortcut.unregisterAll();
+    } catch (err) {
+      console.warn("Warning while unregistering hotkeys:", err.message);
+    }
   }
 
   isHotkeyRegistered(hotkey) {
-    return globalShortcut.isRegistered(hotkey);
+    try {
+      return globalShortcut.isRegistered(hotkey);
+    } catch (err) {
+      console.error("Error checking hotkey registration:", err.message);
+      return false;
+    }
   }
 }
 
